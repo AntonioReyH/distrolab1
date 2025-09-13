@@ -19,13 +19,13 @@ import (
 
 type server struct {
 	pb.UnimplementedFranklinServiceServer
-	rabbitConn     *amqp.Connection
-	rabbitChannel  *amqp.Channel
-	estrellas      int32
-	estrellasLock  sync.RWMutex
-	botinExtra     int64
-	botinBase      uint64
-	chopActivado   bool
+	rabbitConn    *amqp.Connection
+	rabbitChannel *amqp.Channel
+	estrellas     int32
+	estrellasLock sync.RWMutex
+	botinExtra    int64
+	botinBase     uint64
+	chopActivado  bool
 }
 
 type StarMessage struct {
@@ -52,8 +52,10 @@ func (s *server) connectRabbitMQ() {
 		if rabbitHost == "" {
 			rabbitHost = "rabbitmq"
 		}
-		
-		connStr := fmt.Sprintf("amqp://user:pass@%s:5672/", rabbitHost)
+
+		rabbitPort := os.Getenv("RABBITMQ_PORT")
+
+		connStr := fmt.Sprintf("amqp://user:pass@%s:%s/", rabbitHost, rabbitPort)
 		s.rabbitConn, err = amqp.Dial(connStr)
 		if err == nil {
 			break
@@ -61,18 +63,18 @@ func (s *server) connectRabbitMQ() {
 		log.Printf("Intento %d de conectar a RabbitMQ falló: %v", i+1, err)
 		time.Sleep(2 * time.Second)
 	}
-	
+
 	if err != nil {
 		log.Printf("No se pudo conectar a RabbitMQ: %v", err)
 		return
 	}
-	
+
 	s.rabbitChannel, err = s.rabbitConn.Channel()
 	if err != nil {
 		log.Printf("Error al crear canal RabbitMQ: %v", err)
 		return
 	}
-	
+
 	// Declarar cola para Franklin
 	_, err = s.rabbitChannel.QueueDeclare(
 		"franklin_stars", // name
@@ -85,7 +87,7 @@ func (s *server) connectRabbitMQ() {
 	if err != nil {
 		log.Printf("Error al declarar cola: %v", err)
 	}
-	
+
 	log.Println("Conexión a RabbitMQ establecida para Franklin")
 }
 
@@ -94,7 +96,7 @@ func (s *server) startConsumer() {
 		log.Println("No hay canal RabbitMQ disponible")
 		return
 	}
-	
+
 	msgs, err := s.rabbitChannel.Consume(
 		"franklin_stars", // queue
 		"",               // consumer
@@ -108,7 +110,7 @@ func (s *server) startConsumer() {
 		log.Printf("Error al consumir mensajes: %v", err)
 		return
 	}
-	
+
 	go func() {
 		for msg := range msgs {
 			var starMsg StarMessage
@@ -117,18 +119,18 @@ func (s *server) startConsumer() {
 				log.Printf("Error al deserializar mensaje: %v", err)
 				continue
 			}
-			
+
 			s.estrellasLock.Lock()
 			s.estrellas = starMsg.Stars
-			
+
 			// Activar habilidad de Chop a las 3 estrellas
 			if s.estrellas >= 3 && !s.chopActivado {
 				s.chopActivado = true
 				log.Printf("¡Chop activado! Franklin comenzará a obtener botín extra")
 			}
-			
+
 			s.estrellasLock.Unlock()
-			
+
 			log.Printf("Franklin recibió notificación: %d estrellas", starMsg.Stars)
 		}
 	}()
@@ -142,7 +144,7 @@ func (s *server) Distraccion(ctx context.Context, in *pb.FranklinRequest) (*pb.F
 	log.Printf("Turnos necesarios: %d", turnosNecesarios)
 	turnos := int32(0)
 	imprevisto := turnosNecesarios / 2
-	
+
 	for turnos < turnosNecesarios {
 		if turnos == imprevisto {
 			if rand.Float64() > 0.9 {
@@ -156,7 +158,7 @@ func (s *server) Distraccion(ctx context.Context, in *pb.FranklinRequest) (*pb.F
 		turnos++
 		time.Sleep(50 * time.Millisecond) // Simular trabajo
 	}
-	
+
 	log.Printf("Franklin termina distracción con éxito")
 	return &pb.FranklinResponse{
 		Resultado: "exito",
@@ -166,23 +168,23 @@ func (s *server) Distraccion(ctx context.Context, in *pb.FranklinRequest) (*pb.F
 // Fase 3: El Golpe
 func (s *server) IniciarGolpe(ctx context.Context, in *pb.GolpeRequest) (*pb.GolpeResponse, error) {
 	log.Printf("Franklin iniciando el golpe principal")
-	
+
 	// Reset de variables
 	s.estrellas = 0
 	s.botinExtra = 0
 	s.chopActivado = false
-	
+
 	probabilidad := in.GetProbabilidad()
 	turnosNecesarios := 200 - probabilidad
-	
+
 	log.Printf("Turnos necesarios para el golpe: %d", turnosNecesarios)
-	
+
 	turnos := int32(0)
 	consultaIntervalo := turnosNecesarios / 5 // Consultar cada 20% del progreso
 	if consultaIntervalo == 0 {
 		consultaIntervalo = 1
 	}
-	
+
 	for turnos < turnosNecesarios {
 		// Consultar estrellas periódicamente
 		if turnos%consultaIntervalo == 0 {
@@ -190,41 +192,41 @@ func (s *server) IniciarGolpe(ctx context.Context, in *pb.GolpeRequest) (*pb.Gol
 			estrellasActuales := s.estrellas
 			chopActivo := s.chopActivado
 			s.estrellasLock.RUnlock()
-			
-			log.Printf("Turno %d/%d - Estrellas: %d - Chop activo: %v", 
+
+			log.Printf("Turno %d/%d - Estrellas: %d - Chop activo: %v",
 				turnos, turnosNecesarios, estrellasActuales, chopActivo)
-			
+
 			// Verificar límite de fracaso (5 estrellas)
 			if estrellasActuales >= 5 {
 				log.Printf("Franklin alcanzó 5 estrellas - Misión fallida")
 				return &pb.GolpeResponse{
-					Exito:           false,
-					MotivoFallo:     "Alcanzó 5 estrellas de búsqueda",
-					BotinExtra:      s.botinExtra,
+					Exito:            false,
+					MotivoFallo:      "Alcanzó 5 estrellas de búsqueda",
+					BotinExtra:       s.botinExtra,
 					EstrellasFinales: estrellasActuales,
 				}, nil
 			}
-			
+
 			// Si Chop está activo, ganar $1,000 por turno
 			if chopActivo {
 				s.botinExtra += 1000
 			}
 		}
-		
+
 		turnos++
 		time.Sleep(100 * time.Millisecond) // Simular trabajo
 	}
-	
+
 	s.estrellasLock.RLock()
 	estrellasFinales := s.estrellas
 	s.estrellasLock.RUnlock()
-	
+
 	log.Printf("Franklin completó el golpe con éxito - Botín extra: $%d", s.botinExtra)
-	
+
 	return &pb.GolpeResponse{
-		Exito:           true,
-		MotivoFallo:     "",
-		BotinExtra:      s.botinExtra,
+		Exito:            true,
+		MotivoFallo:      "",
+		BotinExtra:       s.botinExtra,
 		EstrellasFinales: estrellasFinales,
 	}, nil
 }
@@ -233,7 +235,7 @@ func (s *server) IniciarGolpe(ctx context.Context, in *pb.GolpeRequest) (*pb.Gol
 func (s *server) ConsultarEstrellas(ctx context.Context, in *pb.EstrellasRequest) (*pb.EstrellasResponse, error) {
 	s.estrellasLock.RLock()
 	defer s.estrellasLock.RUnlock()
-	
+
 	return &pb.EstrellasResponse{
 		Estrellas: s.estrellas,
 	}, nil
@@ -242,10 +244,10 @@ func (s *server) ConsultarEstrellas(ctx context.Context, in *pb.EstrellasRequest
 // Obtener botín total
 func (s *server) ObtenerBotin(ctx context.Context, in *pb.BotinRequest) (*pb.BotinResponse, error) {
 	botinTotal := int64(s.botinBase) + s.botinExtra
-	
-	log.Printf("Franklin entregando botín total: $%d (base: %d, extra: %d)", 
+
+	log.Printf("Franklin entregando botín total: $%d (base: %d, extra: %d)",
 		botinTotal, s.botinBase, s.botinExtra)
-	
+
 	return &pb.BotinResponse{
 		BotinTotal: botinTotal,
 	}, nil
@@ -253,7 +255,7 @@ func (s *server) ObtenerBotin(ctx context.Context, in *pb.BotinRequest) (*pb.Bot
 
 func main() {
 	s := NewServer()
-	
+
 	lis, err := net.Listen("tcp", ":50053")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
@@ -261,7 +263,7 @@ func main() {
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterFranklinServiceServer(grpcServer, s)
-	
+
 	log.Printf("Franklin server starting on port 50053...")
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)

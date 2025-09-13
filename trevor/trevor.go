@@ -52,8 +52,9 @@ func (s *server) connectRabbitMQ() {
 		if rabbitHost == "" {
 			rabbitHost = "rabbitmq"
 		}
-		
-		connStr := fmt.Sprintf("amqp://user:pass@%s:5672/", rabbitHost)
+		rabbitPort := os.Getenv("RABBITMQ_PORT")
+
+		connStr := fmt.Sprintf("amqp://user:pass@%s:%s/", rabbitHost, rabbitPort)
 		s.rabbitConn, err = amqp.Dial(connStr)
 		if err == nil {
 			break
@@ -61,18 +62,18 @@ func (s *server) connectRabbitMQ() {
 		log.Printf("Intento %d de conectar a RabbitMQ falló: %v", i+1, err)
 		time.Sleep(2 * time.Second)
 	}
-	
+
 	if err != nil {
 		log.Printf("No se pudo conectar a RabbitMQ: %v", err)
 		return
 	}
-	
+
 	s.rabbitChannel, err = s.rabbitConn.Channel()
 	if err != nil {
 		log.Printf("Error al crear canal RabbitMQ: %v", err)
 		return
 	}
-	
+
 	// Declarar cola para Trevor
 	_, err = s.rabbitChannel.QueueDeclare(
 		"trevor_stars", // name
@@ -85,7 +86,7 @@ func (s *server) connectRabbitMQ() {
 	if err != nil {
 		log.Printf("Error al declarar cola: %v", err)
 	}
-	
+
 	log.Println("Conexión a RabbitMQ establecida para Trevor")
 }
 
@@ -94,7 +95,7 @@ func (s *server) startConsumer() {
 		log.Println("No hay canal RabbitMQ disponible")
 		return
 	}
-	
+
 	msgs, err := s.rabbitChannel.Consume(
 		"trevor_stars", // queue
 		"",             // consumer
@@ -108,7 +109,7 @@ func (s *server) startConsumer() {
 		log.Printf("Error al consumir mensajes: %v", err)
 		return
 	}
-	
+
 	go func() {
 		for msg := range msgs {
 			var starMsg StarMessage
@@ -117,19 +118,19 @@ func (s *server) startConsumer() {
 				log.Printf("Error al deserializar mensaje: %v", err)
 				continue
 			}
-			
+
 			s.estrellasLock.Lock()
 			s.estrellas = starMsg.Stars
-			
+
 			// Activar furia a las 5 estrellas
 			if s.estrellas >= 5 && !s.furiaActivada {
 				s.furiaActivada = true
 				s.limiteFracaso = 7
 				log.Printf("¡FURIA ACTIVADA! Trevor ahora puede soportar hasta 7 estrellas")
 			}
-			
+
 			s.estrellasLock.Unlock()
-			
+
 			log.Printf("Trevor recibió notificación: %d estrellas", starMsg.Stars)
 		}
 	}()
@@ -143,7 +144,7 @@ func (s *server) Distraccion(ctx context.Context, in *pb.TrevorRequest) (*pb.Tre
 	log.Printf("Turnos necesarios: %d", turnosNecesarios)
 	turnos := int32(0)
 	imprevisto := turnosNecesarios / 2
-	
+
 	for turnos < turnosNecesarios {
 		if turnos == imprevisto {
 			if rand.Float64() > 0.9 {
@@ -157,7 +158,7 @@ func (s *server) Distraccion(ctx context.Context, in *pb.TrevorRequest) (*pb.Tre
 		turnos++
 		time.Sleep(50 * time.Millisecond) // Simular trabajo
 	}
-	
+
 	log.Printf("Trevor termina distracción con éxito")
 	return &pb.TrevorResponse{
 		Resultado: "exito",
@@ -167,23 +168,23 @@ func (s *server) Distraccion(ctx context.Context, in *pb.TrevorRequest) (*pb.Tre
 // Fase 3: El Golpe
 func (s *server) IniciarGolpe(ctx context.Context, in *pb.GolpeRequest) (*pb.GolpeResponse, error) {
 	log.Printf("Trevor iniciando el golpe principal")
-	
+
 	// Reset de variables
 	s.estrellas = 0
 	s.furiaActivada = false
 	s.limiteFracaso = 5
-	
+
 	probabilidad := in.GetProbabilidad()
 	turnosNecesarios := 200 - probabilidad
-	
+
 	log.Printf("Turnos necesarios para el golpe: %d", turnosNecesarios)
-	
+
 	turnos := int32(0)
 	consultaIntervalo := turnosNecesarios / 5 // Consultar cada 20% del progreso
 	if consultaIntervalo == 0 {
 		consultaIntervalo = 1
 	}
-	
+
 	for turnos < turnosNecesarios {
 		// Consultar estrellas periódicamente
 		if turnos%consultaIntervalo == 0 {
@@ -191,36 +192,36 @@ func (s *server) IniciarGolpe(ctx context.Context, in *pb.GolpeRequest) (*pb.Gol
 			estrellasActuales := s.estrellas
 			limiteActual := s.limiteFracaso
 			s.estrellasLock.RUnlock()
-			
-			log.Printf("Turno %d/%d - Estrellas: %d/%d", 
+
+			log.Printf("Turno %d/%d - Estrellas: %d/%d",
 				turnos, turnosNecesarios, estrellasActuales, limiteActual)
-			
+
 			// Verificar límite de fracaso
 			if estrellasActuales >= limiteActual {
 				log.Printf("Trevor alcanzó el límite de %d estrellas - Misión fallida", limiteActual)
 				return &pb.GolpeResponse{
-					Exito:           false,
-					MotivoFallo:     fmt.Sprintf("Alcanzó %d estrellas de búsqueda", limiteActual),
-					BotinExtra:      0,
+					Exito:            false,
+					MotivoFallo:      fmt.Sprintf("Alcanzó %d estrellas de búsqueda", limiteActual),
+					BotinExtra:       0,
 					EstrellasFinales: estrellasActuales,
 				}, nil
 			}
 		}
-		
+
 		turnos++
 		time.Sleep(100 * time.Millisecond) // Simular trabajo
 	}
-	
+
 	s.estrellasLock.RLock()
 	estrellasFinales := s.estrellas
 	s.estrellasLock.RUnlock()
-	
+
 	log.Printf("Trevor completó el golpe con éxito")
-	
+
 	return &pb.GolpeResponse{
-		Exito:           true,
-		MotivoFallo:     "",
-		BotinExtra:      0, // Trevor no genera botín extra
+		Exito:            true,
+		MotivoFallo:      "",
+		BotinExtra:       0, // Trevor no genera botín extra
 		EstrellasFinales: estrellasFinales,
 	}, nil
 }
@@ -229,7 +230,7 @@ func (s *server) IniciarGolpe(ctx context.Context, in *pb.GolpeRequest) (*pb.Gol
 func (s *server) ConsultarEstrellas(ctx context.Context, in *pb.EstrellasRequest) (*pb.EstrellasResponse, error) {
 	s.estrellasLock.RLock()
 	defer s.estrellasLock.RUnlock()
-	
+
 	return &pb.EstrellasResponse{
 		Estrellas: s.estrellas,
 	}, nil
@@ -238,9 +239,9 @@ func (s *server) ConsultarEstrellas(ctx context.Context, in *pb.EstrellasRequest
 // Obtener botín total
 func (s *server) ObtenerBotin(ctx context.Context, in *pb.BotinRequest) (*pb.BotinResponse, error) {
 	botinTotal := int64(s.botinBase)
-	
+
 	log.Printf("Trevor entregando botín total: $%d", botinTotal)
-	
+
 	return &pb.BotinResponse{
 		BotinTotal: botinTotal,
 	}, nil
@@ -248,7 +249,7 @@ func (s *server) ObtenerBotin(ctx context.Context, in *pb.BotinRequest) (*pb.Bot
 
 func main() {
 	s := NewServer()
-	
+
 	lis, err := net.Listen("tcp", ":50052")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
@@ -256,7 +257,7 @@ func main() {
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterTrevorServiceServer(grpcServer, s)
-	
+
 	log.Printf("Trevor server starting on port 50052...")
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)

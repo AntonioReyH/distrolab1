@@ -79,7 +79,7 @@ services:
       franklin:
         condition: service_started
     environment:
-      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_HOST=10.35.168.89:5672
       - RABBITMQ_PORT=5672
     networks:
       - labnet
