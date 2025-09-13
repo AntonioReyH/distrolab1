@@ -5,5 +5,5 @@ docker-lester: docker-rabbitmq
 	docker build -t lester .
 	docker run --rm --name lester -p 50051:50051 \
 		-e RABBITMQ_HOST=10.35.168.89
-        -e RABBITMQ_PORT=5672 \
-        lester
+		-e RABBITMQ_PORT=5672 \
+		lester
