@@ -13,23 +13,23 @@ import (
 )
 
 const (
-	address_lester   = "lester:50051"   // Usar nombres de servicio Docker
-	address_trevor   = "trevor:50052"
-	address_franklin = "franklin:50053"
+	address_lester   = "10.35.168.89:50051" // Usar nombres de servicio Docker
+	address_trevor   = "10.35.168.90:50052"
+	address_franklin = "10.35.168.112:50053"
 )
 
 // Estructura para guardar información del atraco
 type HeistInfo struct {
-	Botin      uint64
-	PFranklin  int32
-	PTrevor    int32
-	RPolicial  int32
-	Fase2      string // Quien hizo la distracción
-	Fase3      string // Quien hizo el golpe
-	BotinExtra int64
-	Exito      bool
+	Botin       uint64
+	PFranklin   int32
+	PTrevor     int32
+	RPolicial   int32
+	Fase2       string // Quien hizo la distracción
+	Fase3       string // Quien hizo el golpe
+	BotinExtra  int64
+	Exito       bool
 	MotivoFallo string
-	Fase       int
+	Fase        int
 }
 
 func communicateWithDistractionService(ctx context.Context, address string, message string, exito int32, isTrevor bool) (string, error) {
@@ -125,7 +125,7 @@ func generarReporte(info HeistInfo) {
 	file.WriteString("=========================================================\n")
 	file.WriteString("==              REPORTE FINAL DE LA MISION            ==\n")
 	file.WriteString("=========================================================\n")
-	
+
 	if info.Exito {
 		file.WriteString(fmt.Sprintf("Mision: Asalto al Banco #%d\n", time.Now().Unix()%10000))
 		file.WriteString("Resultado Global: MISION COMPLETADA CON EXITO!\n\n")
@@ -135,10 +135,10 @@ func generarReporte(info HeistInfo) {
 		file.WriteString("\n--- REPARTO DEL BOTIN ---\n")
 		file.WriteString(fmt.Sprintf("Botin Base: $%d\n", info.Botin))
 		file.WriteString(fmt.Sprintf("Botin Extra (Habilidad de Chop): $%d\n", info.BotinExtra))
-		
+
 		botinTotal := int64(info.Botin) + info.BotinExtra
 		file.WriteString(fmt.Sprintf("Botin Total: $%d\n", botinTotal))
-		
+
 		// TODO: Agregar lógica de reparto en Fase 4
 		file.WriteString("\n---------------------------------------------------------\n")
 		file.WriteString("Nota: Implementar Fase 4 para el reparto del botín\n")
@@ -147,20 +147,20 @@ func generarReporte(info HeistInfo) {
 		file.WriteString("Resultado Global: MISION FALLIDA\n\n")
 		file.WriteString("--- DETALLES DEL FRACASO ---\n")
 		file.WriteString(fmt.Sprintf("Fase del fracaso: %d\n", info.Fase))
-		
+
 		if info.Fase == 2 {
 			file.WriteString(fmt.Sprintf("Personaje: %s\n", info.Fase2))
 		} else if info.Fase == 3 {
 			file.WriteString(fmt.Sprintf("Personaje: %s\n", info.Fase3))
 		}
-		
+
 		file.WriteString(fmt.Sprintf("Motivo: %s\n", info.MotivoFallo))
 		file.WriteString(fmt.Sprintf("Botin perdido: $%d\n", info.Botin))
 		if info.BotinExtra > 0 {
 			file.WriteString(fmt.Sprintf("Botin extra perdido: $%d\n", info.BotinExtra))
 		}
 	}
-	
+
 	file.WriteString("=========================================================\n")
 	log.Println("Reporte generado: Reporte.txt")
 }
@@ -177,14 +177,14 @@ func main() {
 
 	client := pb.NewLesterServiceClient(conn)
 	ctx := context.Background()
-	
+
 	var heistInfo HeistInfo
 
 	//------------------------------------FASE 1------------------------------------
 	operation := "solicitar_trabajo"
 	log.Println("========== INICIO FASE 1: NEGOCIACIÓN ==========")
 	count := 0
-	
+
 	for {
 		count++
 		log.Printf("Intento %d", count)
@@ -192,7 +192,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("Error al enviar la operación: %v", err)
 		}
-		
+
 		if resp.POferta == "rechazo" {
 			log.Printf("Lester no tiene oferta (10%% probabilidad)")
 			log.Printf("Se vuelve a solicitar trabajo...")
@@ -203,14 +203,14 @@ func main() {
 			log.Printf("  Éxito Franklin: %d%%", resp.PFranklin)
 			log.Printf("  Éxito Trevor: %d%%", resp.PTrevor)
 			log.Printf("  Riesgo Policial: %d%%", resp.RPolicial)
-			
+
 			if (resp.PFranklin > 50 || resp.PTrevor > 50) && resp.RPolicial < 80 {
 				log.Printf("✓ Trabajo aceptado")
 				heistInfo.Botin = resp.Botin
 				heistInfo.PFranklin = resp.PFranklin
 				heistInfo.PTrevor = resp.PTrevor
 				heistInfo.RPolicial = resp.RPolicial
-				
+
 				resp2, err := client.MichaelOffer(ctx, &pb.MichaelRequest{Offer: "aceptar"})
 				if err != nil {
 					log.Fatalf("Error al enviar la operación: %v", err)
@@ -229,7 +229,7 @@ func main() {
 
 	//------------------------------------FASE 2------------------------------------
 	log.Println("\n========== INICIO FASE 2: DISTRACCIÓN ==========")
-	
+
 	var chosenPartner string
 	var useTrevor bool
 	var exito int32
@@ -258,7 +258,7 @@ func main() {
 	}
 
 	log.Printf("Respuesta de %s: %s", chosenPartner, result)
-	
+
 	if result != "exito" {
 		heistInfo.Exito = false
 		heistInfo.Fase = 2
@@ -270,13 +270,13 @@ func main() {
 
 	//------------------------------------FASE 3------------------------------------
 	log.Println("\n========== INICIO FASE 3: EL GOLPE ==========")
-	
+
 	// Determinar quién hace el golpe (el que NO hizo la distracción)
 	var golpePartner string
 	var golpeAddress string
 	var golpeProbabilidad int32
 	var useGolpeTrevor bool
-	
+
 	if useTrevor {
 		// Si Trevor hizo la distracción, Franklin hace el golpe
 		golpePartner = "Franklin"
@@ -292,9 +292,9 @@ func main() {
 		useGolpeTrevor = true
 		heistInfo.Fase3 = "Trevor"
 	}
-	
+
 	log.Printf("Enviando a %s para el golpe principal", golpePartner)
-	
+
 	// Notificar a Lester para que inicie las notificaciones de estrellas
 	log.Printf("Notificando a Lester para iniciar alertas de estrellas...")
 	notifResp, err := client.IniciarNotificaciones(ctx, &pb.NotificacionRequest{
@@ -306,17 +306,17 @@ func main() {
 	} else if notifResp.Iniciado {
 		log.Printf("Lester comenzó a enviar notificaciones de estrellas a %s", golpePartner)
 	}
-	
+
 	// Dar tiempo para que se establezca la comunicación
 	time.Sleep(1 * time.Second)
-	
+
 	// Iniciar el golpe
 	log.Printf("%s iniciando el golpe...", golpePartner)
 	golpeResp, err := communicateWithGolpeService(ctx, golpeAddress, golpeProbabilidad, heistInfo.RPolicial, useGolpeTrevor)
 	if err != nil {
 		log.Fatalf("Error al comunicarse con %s para el golpe: %v", golpePartner, err)
 	}
-	
+
 	// Detener notificaciones de Lester
 	detenerResp, err := client.DetenerNotificaciones(ctx, &pb.DetenerRequest{
 		Personaje: golpePartner,
@@ -326,7 +326,7 @@ func main() {
 	} else if detenerResp.Detenido {
 		log.Printf("Notificaciones de estrellas detenidas")
 	}
-	
+
 	// Evaluar resultado del golpe
 	if !golpeResp.Exito {
 		log.Printf("✗ %s fracasó en el golpe: %s", golpePartner, golpeResp.MotivoFallo)
@@ -338,20 +338,20 @@ func main() {
 		log.Println("MISIÓN FALLIDA - Fase 3")
 		return
 	}
-	
+
 	log.Printf("✓ %s completó el golpe con éxito!", golpePartner)
 	log.Printf("  Estrellas finales: %d", golpeResp.EstrellasFinales)
 	if golpeResp.BotinExtra > 0 {
 		log.Printf("  Botín extra (Chop): $%d", golpeResp.BotinExtra)
 	}
-	
+
 	heistInfo.BotinExtra = golpeResp.BotinExtra
 	heistInfo.Exito = true
-	
+
 	// TODO: Implementar Fase 4 - Reparto del botín
 	log.Println("\n========== FASE 4: REPARTO DEL BOTÍN ==========")
 	log.Println("TODO: Implementar la fase 4 de reparto del botín")
-	
+
 	// Generar reporte final
 	generarReporte(heistInfo)
 	log.Println("\n========== MISIÓN COMPLETADA CON ÉXITO ==========")
