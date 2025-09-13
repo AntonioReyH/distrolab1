@@ -1,3 +1,4 @@
-docker-trevor:
-	docker build -t trevor .
-	docker run --rm --name trevor -p 50052:50052 trevor
+docker run --rm --name trevor \
+    -e RABBITMQ_HOST=10.35.168.89 \
+    -e RABBITMQ_PORT=5672 \
+    trevor

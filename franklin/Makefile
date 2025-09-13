@@ -1,3 +1,4 @@
-docker-franklin:
-	docker build -t franklin .
-	docker run --rm --name franklin -p 50053:50053 franklin
+docker run --rm --name franklin \
+    -e RABBITMQ_HOST=10.35.168.89 \
+    -e RABBITMQ_PORT=5672 \
+    franklin
