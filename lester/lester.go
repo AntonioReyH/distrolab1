@@ -55,8 +55,8 @@ func (s *server) connectRabbitMQ() {
 		if rabbitHost == "" {
 			rabbitHost = "rabbitmq"
 		}
-		
-		connStr := fmt.Sprintf("amqp://user:pass@%s:5672/", rabbitHost)
+		rabbitPort := os.Getenv("RABBITMQ_PORT")
+		connStr := fmt.Sprintf("amqp://user:pass@%s:%s/", rabbitHost, rabbitPort)
 		s.rabbitConn, err = amqp.Dial(connStr)
 		if err == nil {
 			break
@@ -64,18 +64,18 @@ func (s *server) connectRabbitMQ() {
 		log.Printf("Intento %d de conectar a RabbitMQ falló: %v", i+1, err)
 		time.Sleep(2 * time.Second)
 	}
-	
+
 	if err != nil {
 		log.Printf("No se pudo conectar a RabbitMQ después de varios intentos: %v", err)
 		return
 	}
-	
+
 	s.rabbitChannel, err = s.rabbitConn.Channel()
 	if err != nil {
 		log.Printf("Error al crear canal RabbitMQ: %v", err)
 		return
 	}
-	
+
 	// Declarar las colas para Franklin y Trevor
 	queues := []string{"franklin_stars", "trevor_stars"}
 	for _, q := range queues {
@@ -91,7 +91,7 @@ func (s *server) connectRabbitMQ() {
 			log.Printf("Error al declarar cola %s: %v", q, err)
 		}
 	}
-	
+
 	log.Println("Conexión a RabbitMQ establecida")
 }
 
@@ -140,7 +140,7 @@ func (s *server) MichaelOffer(ctx context.Context, in *pb.MichaelRequest) (*pb.M
 
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	
+
 	if in.GetOffer() == "aceptar" {
 		log.Printf("Aceptación de oferta recibida")
 		log.Printf("Enviando confirmación de fin de fase...")
@@ -161,7 +161,7 @@ func (s *server) MichaelOffer(ctx context.Context, in *pb.MichaelRequest) (*pb.M
 		log.Printf("3 rechazos detectados, se esperan 10 segundos...")
 		time.Sleep(10 * time.Second)
 	}
-	
+
 	offer := s.offers[s.currentIndex]
 	s.currentIndex = (s.currentIndex + 1) % int32(len(s.offers))
 
@@ -173,28 +173,28 @@ func (s *server) MichaelOffer(ctx context.Context, in *pb.MichaelRequest) (*pb.M
 func (s *server) IniciarNotificaciones(ctx context.Context, in *pb.NotificacionRequest) (*pb.NotificacionResponse, error) {
 	personaje := in.GetPersonaje()
 	riesgoPolicial := in.GetRiesgoPolicial()
-	
+
 	log.Printf("Iniciando notificaciones de estrellas para %s con riesgo policial %d", personaje, riesgoPolicial)
-	
+
 	// Detener notificaciones anteriores si existen
 	if stopChan, exists := s.stopNotifications[personaje]; exists {
 		close(stopChan)
 		time.Sleep(100 * time.Millisecond) // Dar tiempo para que se detenga
 	}
-	
+
 	// Crear nuevo canal de stop
 	stopChan := make(chan bool)
 	s.stopNotifications[personaje] = stopChan
-	
+
 	// Calcular frecuencia de estrellas
 	frecuenciaEstrellas := 100 - riesgoPolicial
 	if frecuenciaEstrellas <= 0 {
 		frecuenciaEstrellas = 1
 	}
-	
+
 	// Iniciar goroutine para enviar notificaciones
 	go s.enviarNotificacionesEstrellas(personaje, frecuenciaEstrellas, stopChan)
-	
+
 	return &pb.NotificacionResponse{
 		Iniciado: true,
 	}, nil
@@ -203,13 +203,13 @@ func (s *server) IniciarNotificaciones(ctx context.Context, in *pb.NotificacionR
 func (s *server) enviarNotificacionesEstrellas(personaje string, frecuencia int32, stopChan chan bool) {
 	estrellas := int32(0)
 	queueName := fmt.Sprintf("%s_stars", personaje)
-	
+
 	// Simular turnos con un ticker
 	ticker := time.NewTicker(time.Duration(frecuencia) * 100 * time.Millisecond) // Ajustar tiempo para pruebas
 	defer ticker.Stop()
-	
+
 	log.Printf("Comenzando envío de estrellas para %s cada %d turnos", personaje, frecuencia)
-	
+
 	for {
 		select {
 		case <-stopChan:
@@ -222,13 +222,13 @@ func (s *server) enviarNotificacionesEstrellas(personaje string, frecuencia int3
 				Character: personaje,
 				Timestamp: time.Now().Unix(),
 			}
-			
+
 			body, err := json.Marshal(msg)
 			if err != nil {
 				log.Printf("Error al serializar mensaje: %v", err)
 				continue
 			}
-			
+
 			if s.rabbitChannel != nil {
 				err = s.rabbitChannel.Publish(
 					"",        // exchange
@@ -239,7 +239,7 @@ func (s *server) enviarNotificacionesEstrellas(personaje string, frecuencia int3
 						ContentType: "application/json",
 						Body:        body,
 					})
-				
+
 				if err != nil {
 					log.Printf("Error al publicar mensaje: %v", err)
 				} else {
@@ -253,9 +253,9 @@ func (s *server) enviarNotificacionesEstrellas(personaje string, frecuencia int3
 // Nueva función para detener notificaciones
 func (s *server) DetenerNotificaciones(ctx context.Context, in *pb.DetenerRequest) (*pb.DetenerResponse, error) {
 	personaje := in.GetPersonaje()
-	
+
 	log.Printf("Deteniendo notificaciones para %s", personaje)
-	
+
 	if stopChan, exists := s.stopNotifications[personaje]; exists {
 		close(stopChan)
 		delete(s.stopNotifications, personaje)
@@ -263,7 +263,7 @@ func (s *server) DetenerNotificaciones(ctx context.Context, in *pb.DetenerReques
 			Detenido: true,
 		}, nil
 	}
-	
+
 	return &pb.DetenerResponse{
 		Detenido: false,
 	}, nil
