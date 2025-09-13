@@ -6,4 +6,6 @@ docker-lester: docker-rabbitmq
 	docker run --rm --name lester -p 50051:50051 \
 		-e RABBITMQ_HOST=10.35.168.89 \
 		-e RABBITMQ_PORT=5672 \
+		-e RABBITMQ_DEFAULT_USER=user \
+		-e RABBITMQ_DEFAULT_PASS=pass \
 		lester

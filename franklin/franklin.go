@@ -49,12 +49,7 @@ func (s *server) connectRabbitMQ() {
 	var err error
 	for i := 0; i < 10; i++ {
 		rabbitHost := os.Getenv("RABBITMQ_HOST")
-		if rabbitHost == "" {
-			rabbitHost = "rabbitmq"
-		}
-
 		rabbitPort := os.Getenv("RABBITMQ_PORT")
-
 		connStr := fmt.Sprintf("amqp://user:pass@%s:%s/", rabbitHost, rabbitPort)
 		s.rabbitConn, err = amqp.Dial(connStr)
 		if err == nil {
